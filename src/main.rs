@@ -21,11 +21,11 @@ async fn main() -> Result<()> {
     let pb= indicatif::ProgressBar::new(100);
     let args = Cli::parse();
 
-    let filev = &args.save;
+    let save_name = &args.save;
 
-    let v = &args.pattern;
+    let user_url = &args.pattern;
 
-    let res = reqwest::get(v).await?.text().await?;
+    let res = reqwest::get(user_url).await?.text().await?;
 
     let document = Document::from(res.as_str());
 
@@ -35,7 +35,7 @@ async fn main() -> Result<()> {
         .into_iter()
         .collect();
 
-    let path = filev;
+    let path = save_name;
     let mut writerr = csv::Writer::from_path(path).unwrap();
     for row in list_of_x {
         writerr.write_record(&[row]).unwrap();
