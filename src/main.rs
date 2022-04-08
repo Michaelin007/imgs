@@ -1,49 +1,30 @@
+use anyhow::Context;
 use clap::Parser;
-use error_chain::error_chain;
 use select::document::Document;
 use select::predicate::Name;
+use std::io::Write;
 
 #[derive(Parser)]
 struct Cli {
-    save: String,
-    pattern: String,
+    #[clap(parse(from_os_str))]
+    output: std::path::PathBuf,
+    url: String,
 }
 
-error_chain! {
-    foreign_links {
-        Reqerror(reqwest::Error);
-        IoError(std::io::Error);
-    }
-}
-
-#[tokio::main]
-async fn main() -> Result<()> {
-    let pb= indicatif::ProgressBar::new(100);
+fn main() -> anyhow::Result<()> {
     let args = Cli::parse();
 
-    let save_name = &args.save;
+    let res =
+        reqwest::blocking::get(&args.url).with_context(|| format!("opening url {:?}", args.url))?;
 
-    let user_url = &args.pattern;
+    let document = Document::from_read(res).context("parsing response")?;
 
-    let res = reqwest::get(user_url).await?.text().await?;
+    let writer = std::fs::File::create(&args.output)
+        .with_context(|| format!("opening file {:?}", args.output))?;
+    let mut writer = std::io::BufWriter::new(writer);
 
-    let document = Document::from(res.as_str());
-
-    let list_of_x: Vec<_> = document
-        .find(Name("img"))
-        .filter_map(|n| n.attr("src"))
-        .into_iter()
-        .collect();
-
-    let path = save_name;
-    let mut writerr = csv::Writer::from_path(path).unwrap();
-    for row in list_of_x {
-        writerr.write_record(&[row]).unwrap();
-        writerr.flush()?;
-        pb.println(format!("[+] finished #{}", row));
-        pb.inc(1);
+    for img_src in document.find(Name("img")).filter_map(|n| n.attr("src")) {
+        writeln!(writer, "{img_src}").context("writing to the output file")?;
     }
-
-
     Ok(())
 }
